@@ -10,22 +10,56 @@ const createFeedbackSchema = z.object({
 });
 
 // GET /api/feedback — list feedback for the caller's workspace
-export async function GET() {
+export async function GET(req: Request) {
   const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const feedback = await db.feedback.findMany({
-    where: { workspaceId: user.workspaceId },
-    orderBy: { createdAt: "desc" },
-    take: 50, // basic limit for now; real pagination comes later
+  const { searchParams } = new URL(req.url);
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+  const search = searchParams.get("search") || "";
+  const channel = searchParams.get("channel") || "";
+  const status = searchParams.get("status") || "";
+  const dateFrom = searchParams.get("dateFrom") || "";
+  const dateTo = searchParams.get("dateTo") || "";
+  const pageSize = 10;
+
+  const where = {
+    workspaceId: user.workspaceId,
+    ...(search
+      ? { content: { contains: search, mode: "insensitive" as const } }
+      : {}),
+    ...(channel ? { channel } : {}),
+    ...(status ? { status: status as "NEW" | "REVIEWED" | "ACTIONED" } : {}),
+    ...(dateFrom || dateTo
+      ? {
+          createdAt: {
+            ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+            ...(dateTo ? { lte: new Date(dateTo + "T23:59:59") } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const [feedback, total] = await Promise.all([
+    db.feedback.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    db.feedback.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    feedback,
+    total,
+    page,
+    totalPages: Math.ceil(total / pageSize),
   });
-
-  return NextResponse.json({ feedback });
 }
-
 // POST /api/feedback — create a new feedback item
 export async function POST(req: Request) {
   const user = await getCurrentUser();
