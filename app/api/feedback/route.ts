@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   const themeId = searchParams.get("themeId") || "";
   const dateFrom = searchParams.get("dateFrom") || "";
   const dateTo = searchParams.get("dateTo") || "";
+  const sortDir = searchParams.get("sort") === "oldest" ? "asc" : "desc";
   const pageSize = 10;
 
   const where = {
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
   const [feedback, total] = await Promise.all([
     db.feedback.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: sortDir },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

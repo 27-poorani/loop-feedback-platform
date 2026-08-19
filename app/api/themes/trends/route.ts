@@ -2,18 +2,41 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-export async function GET() {
+function startOfDay(d: Date) {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function addDays(d: Date, n: number) {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() + n);
+  return copy;
+}
+
+function isoDay(d: Date) {
+  return d.toISOString().split("T")[0];
+}
+
+export async function GET(req: Request) {
   const user = await getCurrentUser();
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(req.url);
+  const requested = parseInt(searchParams.get("days") || "14", 10);
+  const windowDays = [7, 14, 30].includes(requested) ? requested : 14;
+  const half = Math.floor(windowDays / 2);
+
   const now = new Date();
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(now.getDate() - 7);
-  const fourteenDaysAgo = new Date(now);
-  fourteenDaysAgo.setDate(now.getDate() - 14);
+  const periodEnd = startOfDay(now);
+  const periodStart = addDays(periodEnd, -(windowDays - 1));
+  const currentStart = new Date(now);
+  currentStart.setDate(now.getDate() - half);
+  const previousStart = new Date(now);
+  previousStart.setDate(now.getDate() - windowDays);
 
   const themes = await db.theme.findMany({
     where: { workspaceId: user.workspaceId },
@@ -30,9 +53,9 @@ export async function GET() {
     const items = theme.feedback.map((f) => f.feedback);
     const dates = items.map((i) => i.createdAt);
 
-    const currentItems = items.filter((i) => i.createdAt >= sevenDaysAgo);
+    const currentItems = items.filter((i) => i.createdAt >= currentStart);
     const previousItems = items.filter(
-      (i) => i.createdAt >= fourteenDaysAgo && i.createdAt < sevenDaysAgo
+      (i) => i.createdAt >= previousStart && i.createdAt < currentStart
     );
 
     const currentPeriod = currentItems.length;
@@ -44,9 +67,10 @@ export async function GET() {
       changePercent = Math.round(
         ((currentPeriod - previousPeriod) / previousPeriod) * 100
       );
+    } else if (currentPeriod > 0) {
+      changePercent = 100;
     }
 
-    // Sentiment breakdown for THIS period's items in this theme
     const negativeCount = currentItems.filter(
       (i) => i.sentiment === "NEGATIVE"
     ).length;
@@ -71,18 +95,22 @@ export async function GET() {
 
     const byDay: Record<string, number> = {};
     dates.forEach((d) => {
-      if (d >= fourteenDaysAgo) {
-        const day = d.toISOString().split("T")[0];
+      if (d >= periodStart) {
+        const day = isoDay(d);
         byDay[day] = (byDay[day] || 0) + 1;
       }
     });
-    const series = Object.entries(byDay)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const series: { date: string; count: number }[] = [];
+    for (let i = 0; i < windowDays; i++) {
+      const day = isoDay(addDays(periodStart, i));
+      series.push({ date: day, count: byDay[day] || 0 });
+    }
 
     return {
       id: theme.id,
       name: theme.name,
+      description: theme.description,
       total: dates.length,
       currentPeriod,
       previousPeriod,
@@ -99,5 +127,10 @@ export async function GET() {
     return b.total - a.total;
   });
 
-  return NextResponse.json({ trends });
+  return NextResponse.json({
+    trends,
+    windowDays,
+    periodStart: isoDay(periodStart),
+    periodEnd: isoDay(periodEnd),
+  });
 }

@@ -6,6 +6,9 @@ const groq = new OpenAI({
   baseURL: "https://api.groq.com/openai/v1",
 });
 
+// llama-3.3-70b-versatile was shut down on Groq (free/developer) on 2026-08-16.
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+
 const classificationSchema = z.object({
   sentiment: z.enum(["POSITIVE", "NEUTRAL", "NEGATIVE"]),
   sentimentScore: z.number().min(-1).max(1),
@@ -42,7 +45,7 @@ Return ONLY valid JSON (no markdown, no explanation) matching this exact shape:
 
   try {
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.2,
@@ -87,10 +90,22 @@ ${context}
 
 Question: ${question}
 
-Give a concise, direct answer (2-4 sentences) based only on the feedback above.`;
+Write the answer in this format:
+
+Start with one sentence: "Based on ${feedbackItems.length} pieces of feedback, ..." then a short overview.
+
+If the feedback includes positives, add this section exactly:
+**What users like**
+- bullet points (only facts from the feedback)
+
+If the feedback includes negatives or complaints, add this section exactly:
+**What users dislike**
+- bullet points (only facts from the feedback)
+
+If likes/dislikes don't fit the question, use short **Section titles** and bullets instead. Keep it concise. Never invent feedback.`;
 
   const response = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+    model: GROQ_MODEL,
     messages: [{ role: "user", content: prompt }],
     temperature: 0.3,
   });
@@ -103,7 +118,7 @@ Give a concise, direct answer (2-4 sentences) based only on the feedback above.`
 export async function generateNarrative(prompt: string): Promise<string | null> {
   try {
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.4,
     });

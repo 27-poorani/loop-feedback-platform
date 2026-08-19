@@ -1,7 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import {
+  ArrowRight,
+  BarChart3,
+  Brain,
+  ChevronDown,
+  Copy,
+  FileSpreadsheet,
+  MessageCircle,
+  MoreVertical,
+  Pencil,
+  Phone,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Smartphone,
+  Sparkles,
+  Star,
+  Ticket,
+  Users,
+  X,
+} from "lucide-react";
 
 type FeedbackItem = {
   id: string;
@@ -15,8 +37,8 @@ type FeedbackItem = {
 };
 
 type ThemeOption = { id: string; name: string };
-
 type Toast = { type: "success" | "error"; message: string };
+type SortKey = "newest" | "oldest";
 
 const CHANNELS = [
   "Support ticket",
@@ -27,8 +49,93 @@ const CHANNELS = [
   "Social mentions",
 ];
 
-const STATUSES = ["NEW", "REVIEWED", "ACTIONED"];
-const SENTIMENTS = ["POSITIVE", "NEUTRAL", "NEGATIVE"];
+const STATUSES = ["NEW", "REVIEWED", "ACTIONED"] as const;
+const SENTIMENTS = ["POSITIVE", "NEUTRAL", "NEGATIVE"] as const;
+
+const CHANNEL_UI: Record<
+  string,
+  { stripe: string; iconBg: string; iconColor: string; Icon: typeof MessageCircle }
+> = {
+  "Social mentions": {
+    stripe: "#635BFF",
+    iconBg: "#F3F1FF",
+    iconColor: "#635BFF",
+    Icon: MessageCircle,
+  },
+  "Support ticket": {
+    stripe: "#F5C518",
+    iconBg: "#FFF8E1",
+    iconColor: "#B45309",
+    Icon: Ticket,
+  },
+  "App store review": {
+    stripe: "#3B82F6",
+    iconBg: "#EFF6FF",
+    iconColor: "#2563EB",
+    Icon: Smartphone,
+  },
+  "NPS survey": {
+    stripe: "#F79009",
+    iconBg: "#FFFAEB",
+    iconColor: "#B54708",
+    Icon: Star,
+  },
+  "Sales call note": {
+    stripe: "#12B76A",
+    iconBg: "#ECFDF3",
+    iconColor: "#067647",
+    Icon: Phone,
+  },
+  "Community post": {
+    stripe: "#EE46BC",
+    iconBg: "#FDF2FA",
+    iconColor: "#C11574",
+    Icon: Users,
+  },
+};
+
+const DEFAULT_CHANNEL_UI = {
+  stripe: "#635BFF",
+  iconBg: "#F3F1FF",
+  iconColor: "#635BFF",
+  Icon: MessageCircle,
+};
+
+function statusLabel(status: string) {
+  if (status === "NEW") return "New";
+  if (status === "REVIEWED") return "Reviewed";
+  if (status === "ACTIONED") return "Actioned";
+  return status;
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function sentimentClass(sentiment: string | null) {
+  if (sentiment === "NEGATIVE") return "bg-[#FEF3F2] text-[#B42318]";
+  if (sentiment === "POSITIVE") return "bg-[#ECFDF3] text-[#067647]";
+  if (sentiment === "NEUTRAL") return "bg-[#F2F4F7] text-[#344054]";
+  return "bg-[#F2F4F7] text-[#98A2B3]";
+}
+
+function paginationItems(page: number, totalPages: number): (number | "…")[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  if (page <= 3) return [1, 2, 3, "…", totalPages];
+  if (page >= totalPages - 2) {
+    return [1, "…", totalPages - 2, totalPages - 1, totalPages];
+  }
+  return [1, "…", page - 1, page, page + 1, "…", totalPages];
+}
+
+const selectClass =
+  "appearance-none rounded-lg border border-[#E3E8EE] bg-white py-2 pl-3 pr-8 text-[13px] text-[#425466] outline-none";
 
 export default function FeedbackPage() {
   const { data: session } = useSession();
@@ -42,6 +149,7 @@ export default function FeedbackPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [sort, setSort] = useState<SortKey>("newest");
 
   const [filterChannel, setFilterChannel] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -62,12 +170,19 @@ export default function FeedbackPage() {
   const [simulating, setSimulating] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [reclassifyingId, setReclassifyingId] = useState<string | null>(null);
+  const [embedding, setEmbedding] = useState(false);
+  const [deduping, setDeduping] = useState(false);
+  const [classifyElapsed, setClassifyElapsed] = useState(0);
 
   const [toast, setToast] = useState<Toast | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const csvRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const canCreate = session?.user?.role !== "VIEWER";
-
-  const [embedding, setEmbedding] = useState(false); 
+  const isAdmin = session?.user?.role === "ADMIN";
 
   function showToast(type: "success" | "error", message: string) {
     setToast({ type, message });
@@ -77,6 +192,7 @@ export default function FeedbackPage() {
   function buildParams(pageNum: number) {
     return new URLSearchParams({
       page: String(pageNum),
+      sort,
       ...(search ? { search } : {}),
       ...(filterChannel ? { channel: filterChannel } : {}),
       ...(filterStatus ? { status: filterStatus } : {}),
@@ -99,7 +215,11 @@ export default function FeedbackPage() {
   }
 
   useEffect(() => {
-    loadFeedback(1);
+    const themeId = new URLSearchParams(window.location.search).get("themeId");
+    if (themeId) setFilterTheme(themeId);
+  }, []);
+
+  useEffect(() => {
     fetch("/api/themes")
       .then((res) => res.json())
       .then((data) =>
@@ -110,13 +230,12 @@ export default function FeedbackPage() {
           }))
         )
       );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    setSearch(searchInput);
-  }
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
     setPage(1);
@@ -130,7 +249,18 @@ export default function FeedbackPage() {
     filterTheme,
     filterDateFrom,
     filterDateTo,
+    sort,
   ]);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuFor(null);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
 
   function goToPage(newPage: number) {
     setPage(newPage);
@@ -146,6 +276,7 @@ export default function FeedbackPage() {
     setFilterDateTo("");
     setSearchInput("");
     setSearch("");
+    setSort("newest");
   }
 
   async function handleStatusChange(id: string, newStatus: string) {
@@ -161,7 +292,7 @@ export default function FeedbackPage() {
             item.id === id ? { ...item, status: newStatus } : item
           )
         );
-        showToast("success", `Status updated to ${newStatus}`);
+        showToast("success", `Status updated to ${statusLabel(newStatus)}`);
       } else {
         const data = await res.json();
         showToast("error", data.error || "Failed to update status");
@@ -220,6 +351,7 @@ export default function FeedbackPage() {
       }
 
       setForm({ content: "", channel: CHANNELS[0], customerLabel: "" });
+      setAddOpen(false);
       showToast("success", "Feedback added");
       loadFeedback(1);
     } catch {
@@ -233,7 +365,6 @@ export default function FeedbackPage() {
     if (!file) return;
 
     setUploading(true);
-
     const formData = new FormData();
     formData.append("file", file);
 
@@ -286,471 +417,715 @@ export default function FeedbackPage() {
       showToast("error", "Simulation failed");
     }
   }
-  const [classifyElapsed, setClassifyElapsed] = useState(0);
 
   async function handleClassifyAll() {
-      setClassifying(true);
-      setClassifyElapsed(0);
+    setClassifying(true);
+    setClassifyElapsed(0);
 
-      const timer = setInterval(() => {
-        setClassifyElapsed((prev) => prev + 1);
-      }, 1000);
+    const timer = setInterval(() => {
+      setClassifyElapsed((prev) => prev + 1);
+    }, 1000);
 
-      try {
-        const res = await fetch("/api/feedback/classify-all", { method: "POST" });
-        const data = await res.json();
+    try {
+      const res = await fetch("/api/feedback/classify-all", { method: "POST" });
+      const data = await res.json();
 
-        if (!res.ok) {
-          clearInterval(timer);
-          setClassifying(false);
-          showToast("error", data.error || "Failed to start classification");
-          return;
-        }
-
-        showToast(
-          "success",
-          `Started classifying ${data.total} items in the background`
-        );
-
-        const poll = setInterval(async () => {
-          const statusRes = await fetch("/api/feedback/classify-status");
-          const status = await statusRes.json();
-
-          if (status.unclassified === 0) {
-            clearInterval(poll);
-            clearInterval(timer);
-            setClassifying(false);
-            showToast("success", "Classification complete");
-            loadFeedback(page);
-          }
-        }, 3000);
-      } catch {
+      if (!res.ok) {
         clearInterval(timer);
         setClassifying(false);
-        showToast("error", "Failed to start classification");
+        showToast("error", data.error || "Failed to start classification");
+        return;
       }
-    }
-        
 
-  async function handleEmbedAll() {
-  setEmbedding(true);
-  try {
-    const res = await fetch("/api/feedback/embed-all", { method: "POST" });
-    const data = await res.json();
-    setEmbedding(false);
-    if (res.ok) {
       showToast(
         "success",
-        `Embedded ${data.succeeded}/${data.total} items for search`
+        `Started classifying ${data.total} items in the background`
       );
-    } else {
-      showToast("error", data.error || "Embedding failed");
-    }
-  } catch {
-    setEmbedding(false);
-    showToast("error", "Embedding failed");
-  }
-}
-const [deduping, setDeduping] = useState(false);
 
-async function handleDedupe() {
-  if (
-    !confirm(
-      "Remove all duplicate feedback items (keeping the oldest copy of each)? This can't be undone."
+      const poll = setInterval(async () => {
+        const statusRes = await fetch("/api/feedback/classify-status");
+        const status = await statusRes.json();
+
+        if (status.unclassified === 0) {
+          clearInterval(poll);
+          clearInterval(timer);
+          setClassifying(false);
+          showToast("success", "Classification complete");
+          loadFeedback(page);
+        }
+      }, 3000);
+    } catch {
+      clearInterval(timer);
+      setClassifying(false);
+      showToast("error", "Failed to start classification");
+    }
+  }
+
+  async function handleEmbedAll() {
+    setEmbedding(true);
+    try {
+      const res = await fetch("/api/feedback/embed-all", { method: "POST" });
+      const data = await res.json();
+      setEmbedding(false);
+      if (res.ok) {
+        showToast(
+          "success",
+          `Embedded ${data.succeeded}/${data.total} items for search`
+        );
+      } else {
+        showToast("error", data.error || "Embedding failed");
+      }
+    } catch {
+      setEmbedding(false);
+      showToast("error", "Embedding failed");
+    }
+  }
+
+  async function handleDedupe() {
+    if (
+      !confirm(
+        "Remove all duplicate feedback items (keeping the oldest copy of each)? This can't be undone."
+      )
     )
-  )
-    return;
+      return;
 
-  setDeduping(true);
-  try {
-    const res = await fetch("/api/feedback/dedupe", { method: "POST" });
-    const data = await res.json();
-    setDeduping(false);
-    if (res.ok) {
-      showToast("success", `Removed ${data.removed} duplicates`);
-      loadFeedback(1);
-    } else {
-      showToast("error", data.error || "Failed to remove duplicates");
+    setDeduping(true);
+    try {
+      const res = await fetch("/api/feedback/dedupe", { method: "POST" });
+      const data = await res.json();
+      setDeduping(false);
+      if (res.ok) {
+        showToast("success", `Removed ${data.removed} duplicates`);
+        loadFeedback(1);
+      } else {
+        showToast("error", data.error || "Failed to remove duplicates");
+      }
+    } catch {
+      setDeduping(false);
+      showToast("error", "Failed to remove duplicates");
     }
-  } catch {
-    setDeduping(false);
-    showToast("error", "Failed to remove duplicates");
   }
-}
 
-  const hasActiveFilters =
+  async function copyContent(item: FeedbackItem) {
+    try {
+      await navigator.clipboard.writeText(item.content);
+      setMenuFor(null);
+      showToast("success", "Copied feedback text");
+    } catch {
+      showToast("error", "Couldn't copy");
+    }
+  }
+
+  const hasActiveFilters = Boolean(
     filterChannel ||
-    filterStatus ||
-    filterSentiment ||
-    filterTheme ||
-    filterDateFrom ||
-    filterDateTo ||
-    search;
+      filterStatus ||
+      filterSentiment ||
+      filterTheme ||
+      filterDateFrom ||
+      filterDateTo ||
+      search
+  );
 
-  function sentimentBadgeClass(sentiment: string | null) {
-    if (sentiment === "NEGATIVE") return "bg-red-100 text-red-700";
-    if (sentiment === "POSITIVE") return "bg-green-100 text-green-700";
-    if (sentiment === "NEUTRAL") return "bg-gray-200 text-gray-700";
-    return "bg-gray-100 text-gray-400";
-  }
-
-  
+  const pages = useMemo(
+    () => paginationItems(page, totalPages),
+    [page, totalPages]
+  );
 
   return (
-    <div className="p-8 max-w-3xl">
-     {toast && (
-  <div
-    className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-lg shadow-lg text-sm text-white ${
-      toast.type === "success" ? "bg-green-600" : "bg-red-600"
-    }`}
-  >
-    {toast.message}
-  </div>
-)}
+    <div className="min-h-screen px-8 pb-10 pt-8">
+      <div className="mx-auto max-w-[1180px]">
+        {toast && (
+          <div
+            className={`fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-lg px-4 py-2.5 text-sm text-white shadow-lg ${
+              toast.type === "success" ? "bg-[#12B76A]" : "bg-[#F04438]"
+            }`}
+          >
+            {toast.message}
+          </div>
+        )}
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Feedback</h1>
-      <p className="text-gray-500 text-sm mb-6">
-        Add and review customer feedback for your workspace.
-      </p>
-
-      {canCreate && (
-        <form
-          onSubmit={handleSubmit}
-          className="border rounded-lg p-4 mb-8 space-y-3 bg-gray-50"
-        >
+        <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Feedback content
-            </label>
-            <textarea
-              required
-              rows={3}
-              className="mt-1 w-full border rounded px-3 py-2 text-gray-900"
-              value={form.content}
-              onChange={(e) => setForm({ ...form, content: e.target.value })}
-            />
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">
-                Channel
-              </label>
-              <select
-                className="mt-1 w-full border rounded px-3 py-2 text-gray-900"
-                value={form.channel}
-                onChange={(e) => setForm({ ...form, channel: e.target.value })}
-              >
-                {CHANNELS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">
-                Customer (optional)
-              </label>
-              <input
-                type="text"
-                className="mt-1 w-full border rounded px-3 py-2 text-gray-900"
-                value={form.customerLabel}
-                onChange={(e) =>
-                  setForm({ ...form, customerLabel: e.target.value })
-                }
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 disabled:opacity-50"
-          >
-            {submitting ? "Adding..." : "Add feedback"}
-          </button>
-        </form>
-      )}
-
-      {canCreate && (
-          <div className="border rounded-lg p-4 mb-8 bg-gray-50">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Or bulk import from CSV
-            </label>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleCsvUpload}
-              disabled={uploading}
-              className="text-sm"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Columns expected: content, channel, customer_label (optional)
+            <h1 className="text-[28px] font-bold leading-tight text-[#0A2540]">
+              Feedback
+            </h1>
+            <p className="mt-1.5 text-[14px] text-[#697386]">
+              Add, manage and analyse customer feedback from all channels.
             </p>
-            {uploading && (
-              <p className="text-sm text-blue-600 mt-2 flex items-center gap-2">
-                <span className="inline-block w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                Uploading and importing rows, please wait...
+          </div>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#635BFF] px-4 py-2.5 text-[13.5px] font-semibold text-white hover:bg-[#524AE0]"
+            >
+              <Plus size={16} />
+              Add Feedback
+            </button>
+          )}
+        </div>
+
+        {canCreate && (
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#F3F1FF] text-[#635BFF]">
+                <Pencil size={16} />
+              </div>
+              <p className="text-[14.5px] font-semibold text-[#0A2540]">Add Feedback</p>
+              <p className="mt-1 text-[12.5px] leading-5 text-[#697386]">
+                Capture a note, review, or ticket in a few seconds.
               </p>
-            )}
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-[#635BFF]"
+              >
+                Add Feedback <ArrowRight size={14} />
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#ECFDF3] text-[#12B76A]">
+                <FileSpreadsheet size={16} />
+              </div>
+              <p className="text-[14.5px] font-semibold text-[#0A2540]">Import from CSV</p>
+              <p className="mt-1 text-[12.5px] leading-5 text-[#697386]">
+                Bulk import with content, channel, and optional customer label.
+              </p>
+              <input
+                ref={csvRef}
+                type="file"
+                accept=".csv"
+                onChange={handleCsvUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => csvRef.current?.click()}
+                className="mt-3 rounded-md border border-[#A7F3D0] bg-[#ECFDF3] px-3 py-1.5 text-[12.5px] font-medium text-[#067647] disabled:opacity-50"
+              >
+                {uploading ? "Importing..." : "Import CSV"}
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#EFF6FF] text-[#2563EB]">
+                <BarChart3 size={16} />
+              </div>
+              <p className="text-[14.5px] font-semibold text-[#0A2540]">Simulate Channel</p>
+              <p className="mt-1 text-[12.5px] leading-5 text-[#697386]">
+                Generate sample items from App Store, social, or support.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <SimIcon
+                  title="App Store"
+                  disabled={simulating}
+                  onClick={() => handleSimulate("App store review")}
+                >
+                  <Smartphone size={14} />
+                </SimIcon>
+                <SimIcon
+                  title="Social"
+                  disabled={simulating}
+                  onClick={() => handleSimulate("Social mentions")}
+                >
+                  <MessageCircle size={14} />
+                </SimIcon>
+                <SimIcon
+                  title="Support"
+                  disabled={simulating}
+                  onClick={() => handleSimulate("Support ticket")}
+                >
+                  <Ticket size={14} />
+                </SimIcon>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#FDF2FA] text-[#EE46BC]">
+                <Brain size={16} />
+              </div>
+              <p className="text-[14.5px] font-semibold text-[#0A2540]">AI Classification</p>
+              <p className="mt-1 text-[12.5px] leading-5 text-[#697386]">
+                Classify, embed for search, or clean duplicate items.
+              </p>
+              <button
+                type="button"
+                onClick={() => setAiOpen(true)}
+                className="mt-3 rounded-md border border-[#F9DBEA] bg-[#FDF2FA] px-3 py-1.5 text-[12.5px] font-medium text-[#C11574]"
+              >
+                Open AI Tools →
+              </button>
+            </div>
           </div>
         )}
 
-      {canCreate && (
-        <div className="border rounded-lg p-4 mb-8 bg-gray-50">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Or simulate a channel
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleSimulate("App store review")}
-              disabled={simulating}
-              className="text-sm px-3 py-1.5 border rounded hover:bg-gray-100 text-gray-900"
-            >
-              📱 Simulate App Store
-            </button>
-            <button
-              onClick={() => handleSimulate("Social mentions")}
-              disabled={simulating}
-              className="text-sm px-3 py-1.5 border rounded hover:bg-gray-100 text-gray-900"
-            >
-              💬 Simulate Social
-            </button>
-            <button
-              onClick={() => handleSimulate("Support ticket")}
-              disabled={simulating}
-              className="text-sm px-3 py-1.5 border rounded hover:bg-gray-100 text-gray-900"
-            >
-              🎫 Simulate Support
-            </button>
+        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[#E3E8EE] bg-white p-3">
+          <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-[#E3E8EE] px-3 py-2">
+            <Search size={15} className="shrink-0 text-[#A3ACB9]" />
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search feedback content..."
+              className="w-full bg-transparent text-[13.5px] text-[#0A2540] outline-none placeholder:text-[#A3ACB9]"
+            />
           </div>
-        </div>
-      )}
 
-      {canCreate && (
-        <div className="border rounded-lg p-4 mb-8 bg-blue-50">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            AI Classification
+          <label className="flex items-center gap-1.5 text-[12px] text-[#697386]">
+            From
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="rounded-lg border border-[#E3E8EE] px-2 py-2 text-[13px] text-[#425466]"
+            />
           </label>
-         <button
-              onClick={handleClassifyAll}
-              disabled={classifying}
-              className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-            >
-              {classifying ? `Classifying... (${classifyElapsed}s)` : "🤖 Classify all unclassified feedback"}
-            </button>
+          <label className="flex items-center gap-1.5 text-[12px] text-[#697386]">
+            To
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="rounded-lg border border-[#E3E8EE] px-2 py-2 text-[13px] text-[#425466]"
+            />
+          </label>
 
-            {classifying && (
-              <p className="text-xs text-blue-600 mt-2">
-                This runs one item at a time — roughly 2-3 seconds per item, so larger
-                batches may take a few minutes. Feel free to keep working elsewhere; it
-                continues in the background on the server.
-              </p>
-            )}
-          <button
-            onClick={handleEmbedAll}
-            disabled={embedding}
-            className="text-sm px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 ml-2"
-          >
-            {embedding ? "Embedding..." : "🔍 Enable search on all feedback"}
-          </button>
-          {session?.user?.role === "ADMIN" && (
-          <button
-            onClick={handleDedupe}
-            disabled={deduping}
-            className="text-sm px-3 py-1.5 border border-red-200 text-red-600 rounded hover:bg-red-50 disabled:opacity-50 ml-2"
-          >
-            {deduping ? "Removing..." : "🧹 Remove duplicates"}
-          </button>
-        )}
-        </div>
-      )}
-
-      <h2 className="font-semibold text-gray-900 mb-3">Feedback ({total})</h2>
-
-      <form onSubmit={handleSearch} className="flex gap-2 mb-3">
-        <input
-          type="text"
-          placeholder="Search feedback content..."
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          className="flex-1 border rounded px-3 py-2 text-sm text-gray-900"
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 border rounded text-sm text-gray-900 hover:bg-gray-100"
-        >
-          Search
-        </button>
-      </form>
-
-      <div className="flex flex-wrap gap-2 items-center mb-6 p-3 border rounded-lg bg-gray-50">
-        <select
-          value={filterChannel}
-          onChange={(e) => setFilterChannel(e.target.value)}
-          className="border rounded px-2 py-1.5 text-sm text-gray-900"
-        >
-          <option value="">All channels</option>
-          {CHANNELS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="border rounded px-2 py-1.5 text-sm text-gray-900"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filterSentiment}
-          onChange={(e) => setFilterSentiment(e.target.value)}
-          className="border rounded px-2 py-1.5 text-sm text-gray-900"
-        >
-          <option value="">All sentiments</option>
-          {SENTIMENTS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={filterTheme}
-          onChange={(e) => setFilterTheme(e.target.value)}
-          className="border rounded px-2 py-1.5 text-sm text-gray-900"
-        >
-          <option value="">All themes</option>
-          {themeOptions.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-
-        <label className="text-sm text-gray-600 flex items-center gap-1">
-          From
-          <input
-            type="date"
-            value={filterDateFrom}
-            onChange={(e) => setFilterDateFrom(e.target.value)}
-            className="border rounded px-2 py-1.5 text-sm text-gray-900"
+          <FilterSelect
+            value={filterChannel}
+            onChange={setFilterChannel}
+            options={[
+              { value: "", label: "All channels" },
+              ...CHANNELS.map((c) => ({ value: c, label: c })),
+            ]}
           />
-        </label>
-
-        <label className="text-sm text-gray-600 flex items-center gap-1">
-          To
-          <input
-            type="date"
-            value={filterDateTo}
-            onChange={(e) => setFilterDateTo(e.target.value)}
-            className="border rounded px-2 py-1.5 text-sm text-gray-900"
+          <FilterSelect
+            value={filterStatus}
+            onChange={setFilterStatus}
+            options={[
+              { value: "", label: "All statuses" },
+              ...STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
+            ]}
           />
-        </label>
+          <FilterSelect
+            value={filterSentiment}
+            onChange={setFilterSentiment}
+            options={[
+              { value: "", label: "All sentiments" },
+              ...SENTIMENTS.map((s) => ({ value: s, label: s })),
+            ]}
+          />
+          <FilterSelect
+            value={filterTheme}
+            onChange={setFilterTheme}
+            options={[
+              { value: "", label: "All themes" },
+              ...themeOptions.map((t) => ({ value: t.id, label: t.name })),
+            ]}
+          />
 
-        {hasActiveFilters && (
           <button
+            type="button"
             onClick={clearFilters}
-            className="text-sm text-gray-500 underline ml-auto"
+            disabled={!hasActiveFilters}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#E3E8EE] px-3 py-2 text-[13px] text-[#425466] hover:bg-[#F6F9FC] disabled:opacity-40"
           >
-            Clear all
+            <RotateCcw size={14} />
+            Reset filters
           </button>
+        </div>
+
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[14px] font-semibold text-[#0A2540]">
+            Feedback ({total})
+          </h2>
+          <div className="relative">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className={selectClass}
+            >
+              <option value="newest">Sort by: Newest first</option>
+              <option value="oldest">Sort by: Oldest first</option>
+            </select>
+            <ChevronDown
+              size={14}
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8A94A6]"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <p className="py-10 text-center text-[13px] text-[#697386]">Loading...</p>
+        ) : items.length === 0 ? (
+          <p className="py-10 text-center text-[13px] text-[#697386]">
+            No feedback found.
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {items.map((item) => {
+              const ui = CHANNEL_UI[item.channel] ?? DEFAULT_CHANNEL_UI;
+              const Icon = ui.Icon;
+              return (
+                <div
+                  key={item.id}
+                  className="relative overflow-hidden rounded-xl border border-[#E3E8EE] bg-white pl-1 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+                >
+                  <div
+                    className="absolute bottom-0 left-0 top-0 w-[4px]"
+                    style={{ background: ui.stripe }}
+                  />
+                  <div className="flex flex-wrap items-start gap-4 px-4 py-3.5 pl-5">
+                    <div className="flex w-[150px] shrink-0 items-start gap-2.5">
+                      <div
+                        className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                        style={{ background: ui.iconBg, color: ui.iconColor }}
+                      >
+                        <Icon size={15} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10.5px] font-semibold uppercase tracking-wide text-[#697386]">
+                          {item.channel}
+                        </p>
+                        <p className="truncate text-[12px] text-[#8A94A6]">
+                          {item.customerLabel ? `— ${item.customerLabel}` : "— Workspace"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="relative shrink-0">
+                      <select
+                        value={item.status}
+                        disabled={!canCreate}
+                        onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                        className="appearance-none rounded-md border border-[#E3E8EE] bg-white py-1 pl-2.5 pr-7 text-[12px] text-[#425466] outline-none disabled:opacity-60"
+                      >
+                        <option value="NEW">New</option>
+                        <option value="REVIEWED">Reviewed</option>
+                        <option value="ACTIONED">Actioned</option>
+                      </select>
+                      <ChevronDown
+                        size={12}
+                        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[#8A94A6]"
+                      />
+                    </div>
+
+                    <p className="min-w-[200px] flex-1 text-[13.5px] leading-6 text-[#0A2540]">
+                      {item.content}
+                    </p>
+
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${sentimentClass(
+                          item.sentiment
+                        )}`}
+                      >
+                        {item.sentiment ?? "UNCLASSIFIED"}
+                      </span>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => handleReclassify(item.id)}
+                          disabled={reclassifyingId === item.id}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-[#E3E8EE] px-2.5 py-1 text-[12px] text-[#425466] hover:bg-[#F6F9FC] disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            size={12}
+                            className={reclassifyingId === item.id ? "animate-spin" : ""}
+                          />
+                          {reclassifyingId === item.id ? "Re-classifying..." : "Re-classify"}
+                        </button>
+                      )}
+                    </div>
+
+                    <div
+                      className="relative ml-auto flex shrink-0 items-center gap-2 text-[12.5px] text-[#697386]"
+                      ref={menuFor === item.id ? menuRef : undefined}
+                    >
+                      <span>{formatDate(item.createdAt)}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMenuFor((cur) => (cur === item.id ? null : item.id))
+                        }
+                        className="rounded-md p-1 hover:bg-[#F6F9FC]"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+                      {menuFor === item.id && (
+                        <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[#E3E8EE] bg-white py-1 shadow-lg">
+                          <button
+                            type="button"
+                            onClick={() => copyContent(item)}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#425466] hover:bg-[#F6F9FC]"
+                          >
+                            <Copy size={13} />
+                            Copy text
+                          </button>
+                          {canCreate && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuFor(null);
+                                handleReclassify(item.id);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[#425466] hover:bg-[#F6F9FC]"
+                            >
+                              <Sparkles size={13} />
+                              Re-classify
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => goToPage(page - 1)}
+              disabled={page <= 1}
+              className="rounded-md border border-[#E3E8EE] px-3 py-1.5 text-[13px] text-[#425466] disabled:opacity-40"
+            >
+              Previous
+            </button>
+            {pages.map((p, i) =>
+              p === "…" ? (
+                <span key={`e-${i}`} className="px-1 text-[13px] text-[#8A94A6]">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => goToPage(p)}
+                  className={`min-w-[34px] rounded-md px-2.5 py-1.5 text-[13px] ${
+                    p === page
+                      ? "bg-[#635BFF] font-medium text-white"
+                      : "border border-[#E3E8EE] text-[#425466] hover:bg-[#F6F9FC]"
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+            <button
+              type="button"
+              onClick={() => goToPage(page + 1)}
+              disabled={page >= totalPages}
+              className="rounded-md border border-[#E3E8EE] px-3 py-1.5 text-[13px] text-[#425466] disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         )}
       </div>
 
-      {loading ? (
-        <p className="text-gray-500">Loading...</p>
-      ) : items.length === 0 ? (
-        <p className="text-gray-500">No feedback found.</p>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="border rounded-lg p-4">
-              <div className="flex justify-between items-start mb-1">
-                <span className="text-xs font-medium text-gray-500 uppercase">
-                  {item.channel}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {new Date(item.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-              <p className="text-gray-900">{item.content}</p>
-              {item.customerLabel && (
-                <p className="text-sm text-gray-500 mt-1">
-                  — {item.customerLabel}
+      {addOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A2540]/30 px-4"
+          onClick={() => setAddOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl border border-[#E3E8EE] bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-[16px] font-semibold text-[#0A2540]">Add Feedback</h3>
+                <p className="mt-1 text-[13px] text-[#697386]">
+                  Add a single item from any channel.
                 </p>
-              )}
-
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <select
-                  value={item.status}
-                  onChange={(e) =>
-                    handleStatusChange(item.id, e.target.value)
-                  }
-                  className="text-xs border rounded px-2 py-1 text-gray-900"
-                >
-                  <option value="NEW">New</option>
-                  <option value="REVIEWED">Reviewed</option>
-                  <option value="ACTIONED">Actioned</option>
-                </select>
-
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${sentimentBadgeClass(
-                    item.sentiment
-                  )}`}
-                >
-                  {item.sentiment ?? "Unclassified"}
-                </span>
-
-                {canCreate && (
-                  <button
-                    onClick={() => handleReclassify(item.id)}
-                    disabled={reclassifyingId === item.id}
-                    className="text-xs px-2 py-1 border rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {reclassifyingId === item.id
-                      ? "Re-classifying..."
-                      : "🔄 Re-classify"}
-                  </button>
-                )}
               </div>
+              <button
+                type="button"
+                onClick={() => setAddOpen(false)}
+                className="rounded-md p-1 text-[#8A94A6] hover:bg-[#F6F9FC]"
+              >
+                <X size={16} />
+              </button>
             </div>
-          ))}
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <label className="block text-[13px] font-medium text-[#425466]">
+                Feedback content
+                <textarea
+                  required
+                  rows={4}
+                  className="mt-1 w-full rounded-lg border border-[#E3E8EE] px-3 py-2 text-[14px] text-[#0A2540] outline-none focus:border-[#635BFF]"
+                  value={form.content}
+                  onChange={(e) => setForm({ ...form, content: e.target.value })}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-[13px] font-medium text-[#425466]">
+                  Channel
+                  <select
+                    className="mt-1 w-full rounded-lg border border-[#E3E8EE] px-3 py-2 text-[14px] text-[#0A2540]"
+                    value={form.channel}
+                    onChange={(e) => setForm({ ...form, channel: e.target.value })}
+                  >
+                    {CHANNELS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[13px] font-medium text-[#425466]">
+                  Customer (optional)
+                  <input
+                    type="text"
+                    className="mt-1 w-full rounded-lg border border-[#E3E8EE] px-3 py-2 text-[14px] text-[#0A2540] outline-none focus:border-[#635BFF]"
+                    value={form.customerLabel}
+                    onChange={(e) =>
+                      setForm({ ...form, customerLabel: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAddOpen(false)}
+                  className="rounded-lg border border-[#E3E8EE] px-4 py-2 text-[13.5px] font-medium text-[#425466]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-lg bg-[#635BFF] px-4 py-2 text-[13.5px] font-semibold text-white hover:bg-[#524AE0] disabled:opacity-50"
+                >
+                  {submitting ? "Adding..." : "Add feedback"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-6">
-          <button
-            onClick={() => goToPage(page - 1)}
-            disabled={page <= 1}
-            className="px-3 py-1.5 border rounded text-sm disabled:opacity-40 text-gray-900"
+      {aiOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A2540]/30 px-4"
+          onClick={() => setAiOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-[#E3E8EE] bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
           >
-            Previous
-          </button>
-          <span className="px-3 py-1.5 text-sm text-gray-600">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() => goToPage(page + 1)}
-            disabled={page >= totalPages}
-            className="px-3 py-1.5 border rounded text-sm disabled:opacity-40 text-gray-900"
-          >
-            Next
-          </button>
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-[16px] font-semibold text-[#0A2540]">AI Tools</h3>
+                <p className="mt-1 text-[13px] text-[#697386]">
+                  Run classification, embeddings, or duplicate cleanup.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAiOpen(false)}
+                className="rounded-md p-1 text-[#8A94A6] hover:bg-[#F6F9FC]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleClassifyAll}
+                disabled={classifying}
+                className="w-full rounded-lg bg-[#635BFF] px-3 py-2.5 text-left text-[13.5px] font-medium text-white hover:bg-[#524AE0] disabled:opacity-50"
+              >
+                {classifying
+                  ? `Classifying... (${classifyElapsed}s)`
+                  : "Classify all unclassified feedback"}
+              </button>
+              {classifying && (
+                <p className="text-[12px] text-[#697386]">
+                  Runs one item at a time in the background. You can keep using the app.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleEmbedAll}
+                disabled={embedding}
+                className="w-full rounded-lg border border-[#E3E8EE] px-3 py-2.5 text-left text-[13.5px] font-medium text-[#425466] hover:bg-[#F6F9FC] disabled:opacity-50"
+              >
+                {embedding ? "Embedding..." : "Enable search on all feedback"}
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleDedupe}
+                  disabled={deduping}
+                  className="w-full rounded-lg border border-[#FECDCA] px-3 py-2.5 text-left text-[13.5px] font-medium text-[#B42318] hover:bg-[#FEF3F2] disabled:opacity-50"
+                >
+                  {deduping ? "Removing..." : "Remove duplicates"}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function FilterSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={selectClass}
+      >
+        {options.map((o) => (
+          <option key={o.value || o.label} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8A94A6]"
+      />
+    </div>
+  );
+}
+
+function SimIcon({
+  title,
+  disabled,
+  onClick,
+  children,
+}: {
+  title: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center rounded-md border border-[#E3E8EE] text-[#425466] hover:bg-[#F6F9FC] disabled:opacity-50"
+    >
+      {children}
+    </button>
   );
 }
