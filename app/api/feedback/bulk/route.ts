@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import Papa from "papaparse";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { classifyAndSave } from "@/lib/classify";
+import { generateAndSaveEmbedding } from "@/lib/embeddings";
 
 type CsvRow = {
   content?: string;
@@ -31,45 +34,48 @@ export async function POST(req: Request) {
   }
 
   const text = await file.text();
-
   const parsed = Papa.parse<CsvRow>(text, {
     header: true,
     skipEmptyLines: true,
   });
 
-  let successCount = 0;
-  let failCount = 0;
-  const errors: string[] = [];
+  const validRows = parsed.data.filter((row) => row.content && row.channel);
+  const invalidCount = parsed.data.length - validRows.length;
+  const workspaceId = user.workspaceId;
 
-  for (let i = 0; i < parsed.data.length; i++) {
-    const row = parsed.data[i];
+  // Insert rows now — this part is fast (just database writes),
+  // so the user sees a real "Imported X items" result immediately.
+  const created = await db.feedback.createMany({
+    data: validRows.map((row) => ({
+      content: row.content!,
+      channel: row.channel!,
+      customerLabel: row.customer_label || null,
+      workspaceId,
+      status: "NEW" as const,
+    })),
+  });
 
-    if (!row.content || !row.channel) {
-      failCount++;
-      errors.push(`Row ${i + 2}: missing content or channel`);
-      continue;
+  // Classification + embedding are the slow parts (AI calls) — push these
+  // into the background so navigating away never interrupts them.
+  after(async () => {
+    const freshRows = await db.feedback.findMany({
+      where: { workspaceId, sentiment: null },
+      select: { id: true, content: true },
+      orderBy: { createdAt: "desc" },
+      take: created.count,
+    });
+
+    for (const item of freshRows) {
+      await classifyAndSave(item.id, item.content, workspaceId).catch((err) =>
+        console.error("Background classify failed:", err)
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2200)); // ~27/min, under Groq's 30 limit
     }
-
-    try {
-      await db.feedback.create({
-        data: {
-          content: row.content,
-          channel: row.channel,
-          customerLabel: row.customer_label || null,
-          workspaceId: user.workspaceId,
-          status: "NEW",
-        },
-      });
-      successCount++;
-    } catch {
-      failCount++;
-      errors.push(`Row ${i + 2}: failed to save`);
-    }
-  }
+  });
 
   return NextResponse.json({
-    imported: successCount,
-    failed: failCount,
-    errors: errors.slice(0, 10), // cap so response doesn't explode on huge files
+    imported: created.count,
+    failed: invalidCount,
+    errors: [],
   });
 }

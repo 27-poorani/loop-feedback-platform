@@ -25,5 +25,8 @@ export const config = {
     "/ask/:path*",
     "/reports/:path*",
     "/settings/:path*",
+    "/themes/:path*",
+    "/trends/:path*",
+    "/reports/:path*",
   ],
 };
