@@ -166,7 +166,7 @@ export default function Home() {
             return (
               <article
                 key={feature.title}
-                className="rounded-2xl border border-[#E3E8EE] bg-white p-5 shadow-[0_1px_2px_rgba(10,37,64,0.04)]"
+                className="rounded-2xl border border-[#E3E8EE] bg-white p-5 shadow-[0_1px_2px_rgba(10,37,64,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(10,37,64,0.08)]"
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F5F3FF] text-[#635BFF]">
                   <Icon size={18} />
@@ -184,7 +184,7 @@ export default function Home() {
         <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.03em]">From signup to insight in three steps.</h2>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {STEPS.map((step) => (
-            <article key={step.n} className="rounded-2xl border border-[#E3E8EE] bg-white p-5">
+            <article key={step.n} className="rounded-2xl border border-[#E3E8EE] bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(10,37,64,0.08)]">
               <p className="text-[12px] font-semibold text-[#635BFF]">{step.n}</p>
               <h3 className="mt-3 text-[16px] font-semibold">{step.title}</h3>
               <p className="mt-1.5 text-[14px] leading-6 text-[#4B5565]">{step.body}</p>

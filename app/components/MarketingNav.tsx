@@ -9,7 +9,7 @@ export default function MarketingNav() {
   const signedIn = status === "authenticated" && Boolean(session);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#E3E8EE]/80 bg-[#F6F9FC]/80 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-[#E3E8EE]/80 bg-white/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
         <LoopMark />
         <nav className="hidden items-center gap-7 text-[13.5px] text-[#425466] md:flex">

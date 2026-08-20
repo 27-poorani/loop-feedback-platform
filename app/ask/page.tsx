@@ -290,11 +290,11 @@ export default function AskPage() {
   }
 
   return (
-    <div className="relative min-h-screen px-8 pb-10 pt-8">
+    <div className="loop-page relative px-5 pb-12 pt-7 sm:px-8">
       <div className="mx-auto max-w-[880px]">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[28px] font-bold leading-tight text-[#0A2540]">Ask LOOP</h1>
+            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] text-[#0A2540]">Ask LOOP</h1>
             <p className="mt-1.5 max-w-xl text-[14px] leading-6 text-[#697386]">
               Ask a plain-English question about your feedback. Answers are based
               only on real feedback in your workspace.

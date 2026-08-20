@@ -1,22 +1,87 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  FileText,
+  Home,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Sparkles,
+  Tag,
+  TrendingUp,
+  Users,
+  X,
+} from "lucide-react";
+import { LoopMark } from "./LoopMark";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10" },
-  { href: "/dashboard", label: "Dashboard", icon: "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" },
-  { href: "/feedback", label: "Feedback", icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" },
-  { href: "/settings/members", label: "Members", icon: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" },
-  { href: "/themes", label: "Themes", icon: "M20.59 13.41L11 3.83A2 2 0 009.59 3.24L3 3v6.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.82 0l4.6-4.6a2 2 0 000-2.83zM7 7h.01" },
-  { href: "/trends", label: "Trends", icon: "M23 6l-9.5 9.5-5-5L1 18" },
-  { href: "/ask", label: "Ask LOOP", icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" },
-  { href: "/reports", label: "Reports", icon: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6" },
+const OVERVIEW = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/feedback", label: "Feedback", icon: MessageSquare },
+  { href: "/settings/members", label: "Members", icon: Users },
 ];
 
-export default function Sidebar({ children }: { children: React.ReactNode }) {
+const INTELLIGENCE = [
+  { href: "/themes", label: "Themes", icon: Tag },
+  { href: "/trends", label: "Trends", icon: TrendingUp },
+  { href: "/ask", label: "Ask LOOP", icon: Sparkles },
+  { href: "/reports", label: "Reports", icon: FileText },
+];
+
+function isActive(pathname: string | null, href: string) {
+  if (!pathname) return false;
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function NavGroup({
+  title,
+  items,
+  pathname,
+  onNavigate,
+}: {
+  title: string;
+  items: typeof OVERVIEW;
+  pathname: string | null;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="mb-5">
+      <p className="mb-1.5 px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A94A6]">
+        {title}
+      </p>
+      <div className="flex flex-col gap-0.5">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavigate}
+              className={`flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13.5px] no-underline transition-colors ${
+                active
+                  ? "bg-[#635BFF] font-medium text-white shadow-[0_8px_18px_-10px_rgba(99,91,255,0.9)]"
+                  : "font-normal text-[#425466] hover:bg-[#F6F9FC] hover:text-[#0A2540]"
+              }`}
+            >
+              <Icon size={16} strokeWidth={1.9} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function Sidebar({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -30,152 +95,94 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  if (!session) return <>{children}</>;
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  const onMarketing = pathname === "/";
+  if (!session || onMarketing) return <>{children}</>;
 
   const showSidebar = isDesktop || mobileOpen;
+  const email = session.user?.email ?? "";
+  const role = session.user?.role ?? "";
+  const initials = (session.user?.name || email || "U")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div className="flex min-h-screen">
       {!isDesktop && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 40,
-            background: "var(--loop-surface)",
-            borderBottom: "1px solid var(--loop-border)",
-            padding: "12px 16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Link
-            href="/"
-            style={{ fontWeight: 700, fontSize: 15, color: "var(--loop-text-primary)", textDecoration: "none" }}
-          >
-            LOOP
-          </Link>
+        <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-[#E3E8EE] bg-white/90 px-4 py-3 backdrop-blur-md">
+          <LoopMark />
           <button
+            type="button"
             onClick={() => setMobileOpen((v) => !v)}
-            style={{
-              background: "none",
-              border: "1px solid var(--loop-border)",
-              borderRadius: 6,
-              padding: "6px 10px",
-              fontSize: 13,
-              color: "var(--loop-text-primary)",
-            }}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#E3E8EE] text-[#0A2540]"
+            aria-label="Toggle menu"
           >
-            Menu
+            {mobileOpen ? <X size={16} /> : <Menu size={16} />}
           </button>
         </div>
       )}
 
-      {showSidebar && (
-        <aside
-          style={{
-            width: 220,
-            background: "var(--loop-surface)",
-            borderRight: "1px solid var(--loop-border)",
-            padding: "20px 14px",
-            position: "fixed",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            zIndex: 30,
-            overflowY: "auto",
-          }}
-        >
-          <Link
-            href="/"
-            onClick={() => setMobileOpen(false)}
-            style={{
-              fontWeight: 700,
-              fontSize: 16,
-              color: "var(--loop-text-primary)",
-              padding: "0 10px",
-              marginBottom: 20,
-              marginTop: 4,
-              textDecoration: "none",
-              display: "block",
-            }}
-          >
-            LOOP
-          </Link>
+      {!isDesktop && mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 z-30 bg-[#0A2540]/30 backdrop-blur-[2px]"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
-          <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {NAV_ITEMS.map((item) => {
-              const active = pathname === item.href || pathname?.startsWith(item.href + "/");
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 10px",
-                    borderRadius: 6,
-                    fontSize: 13.5,
-                    fontWeight: active ? 500 : 400,
-                    color: active ? "#fff" : "var(--loop-text-secondary)",
-                    background: active ? "var(--loop-accent)" : "transparent",
-                    textDecoration: "none",
-                  }}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={item.icon} />
-                  </svg>
-                  {item.label}
-                </Link>
-              );
-            })}
+      {showSidebar && (
+        <aside className="fixed bottom-0 left-0 top-0 z-40 flex w-[248px] flex-col border-r border-[#E3E8EE] bg-white px-3.5 py-5">
+          <LoopMark className="mb-6 px-1.5" onClick={() => setMobileOpen(false)} />
+
+          <nav className="flex-1 overflow-y-auto pr-0.5">
+            <NavGroup
+              title="Workspace"
+              items={OVERVIEW}
+              pathname={pathname}
+              onNavigate={() => setMobileOpen(false)}
+            />
+            <NavGroup
+              title="Intelligence"
+              items={INTELLIGENCE}
+              pathname={pathname}
+              onNavigate={() => setMobileOpen(false)}
+            />
           </nav>
 
-          <div
-            style={{
-              marginTop: 24,
-              paddingTop: 16,
-              borderTop: "1px solid var(--loop-border)",
-            }}
-          >
-            <div style={{ fontSize: 12, color: "var(--loop-text-secondary)", padding: "0 10px", marginBottom: 8, wordBreak: "break-word" }}>
-              {session.user?.email}
-              <br />
-              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.3 }}>
-                {session.user?.role}
+          <div className="mt-3 rounded-xl border border-[#E3E8EE] bg-[#F8FAFC] p-3">
+            <div className="mb-3 flex items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#635BFF] text-[12px] font-semibold text-white">
+                {initials}
               </span>
+              <div className="min-w-0">
+                <p className="truncate text-[12.5px] font-medium text-[#0A2540]">
+                  {session.user?.name || email}
+                </p>
+                <p className="truncate text-[11px] uppercase tracking-[0.12em] text-[#8A94A6]">
+                  {role}
+                </p>
+              </div>
             </div>
             <button
+              type="button"
               onClick={() => signOut({ callbackUrl: "/" })}
-              style={{
-                width: "100%",
-                textAlign: "left",
-                padding: "8px 10px",
-                borderRadius: 6,
-                fontSize: 13,
-                color: "var(--loop-text-secondary)",
-                background: "transparent",
-                border: "1px solid var(--loop-border)",
-              }}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#E3E8EE] bg-white py-2 text-[13px] font-medium text-[#425466] hover:bg-[#F6F9FC]"
             >
+              <LogOut size={14} />
               Log out
             </button>
           </div>
         </aside>
       )}
 
-      <main
-        style={{
-          flex: 1,
-          marginLeft: isDesktop ? 220 : 0,
-          paddingTop: isDesktop ? 0 : 56,
-        }}
-      >
+      <main className={`min-w-0 flex-1 ${isDesktop ? "ml-[248px]" : "pt-14"}`}>
         {children}
       </main>
     </div>

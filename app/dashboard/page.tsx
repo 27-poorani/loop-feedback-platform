@@ -164,10 +164,10 @@ export default function DashboardPage() {
   const isEmpty = !!stats && stats.rangeTotal === 0;
 
   return (
-    <div className="min-h-screen px-8 pb-10 pt-8">
+    <div className="loop-page px-5 pb-12 pt-7 sm:px-8">
       <div className="mx-auto max-w-[1180px]">
         <div className="mb-5">
-          <h1 className="text-[28px] font-bold leading-tight text-[#0A2540]">
+          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] text-[#0A2540]">
             Dashboard
           </h1>
           <p className="mt-1.5 text-[14px] text-[#697386]">
@@ -257,7 +257,7 @@ export default function DashboardPage() {
         ) : (
           <>
             <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3F1FF] text-[#635BFF]">
                   <MessageCircle size={18} />
                 </div>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-[12.5px] text-[#8A94A6]">All time</p>
               </div>
 
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#ECFDF3] text-[#12B76A]">
                   <TrendingUp size={18} />
                 </div>
@@ -286,7 +286,7 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#FEF3F2] text-[#F04438]">
                   <TrendingDown size={18} />
                 </div>
@@ -312,7 +312,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <h2 className="mb-3 text-[14px] font-semibold text-[#0A2540]">
                   Feedback volume
                 </h2>
@@ -359,7 +359,7 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <h2 className="mb-1 text-[14px] font-semibold text-[#0A2540]">
                   Sentiment distribution
                 </h2>
@@ -425,7 +425,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <h2 className="mb-3 text-[14px] font-semibold text-[#0A2540]">
                   Feedback by channel
                 </h2>
@@ -456,7 +456,7 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <h2 className="mb-3 text-[14px] font-semibold text-[#0A2540]">
                   Key insights
                 </h2>
@@ -491,7 +491,7 @@ export default function DashboardPage() {
                 </Link>
               </div>
 
-              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <div className="rounded-xl border border-[#E3E8EE] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-[0_10px_28px_rgba(10,37,64,0.06)]">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-[14px] font-semibold text-[#0A2540]">
                     Recent feedback

@@ -227,11 +227,11 @@ export default function MembersPage() {
   }, [members, query, roleFilter, sort]);
 
   return (
-    <div className="min-h-screen px-8 pb-10 pt-8">
+    <div className="loop-page px-5 pb-12 pt-7 sm:px-8">
       <div className="mx-auto max-w-[1100px]">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[28px] font-bold leading-tight text-[#0A2540]">
+            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] text-[#0A2540]">
               Team members
             </h1>
             <p className="mt-1.5 text-[14px] text-[#697386]">
