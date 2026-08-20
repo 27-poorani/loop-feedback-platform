@@ -1,9 +1,10 @@
-
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import Link from "next/link";
+import AuthShell, { inputClass, labelClass } from "../components/AuthShell";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -35,7 +36,6 @@ export default function SignupPage() {
       return;
     }
 
-    // Auto log-in right after signup
     const loginResult = await signIn("credentials", {
       email: form.email,
       password: form.password,
@@ -53,69 +53,62 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-8 rounded-lg shadow-md w-full max-w-md space-y-4"
-      >
-        <h1 className="text-2xl font-bold text-gray-900">Create your account</h1>
-        <p className="text-sm text-gray-500">
-          This creates your workspace and makes you the admin.
-        </p>
-
+    <AuthShell
+      title="Create your workspace"
+      subtitle="This sets up your company in LOOP and makes you the Admin. You can invite the rest of the team later."
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-red-50 text-red-700 text-sm p-3 rounded">
+          <div className="rounded-lg border border-[#FECDCA] bg-[#FEF3F2] px-3 py-2.5 text-[13.5px] text-[#B42318]">
             {error}
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Your name
-          </label>
+          <label className={labelClass}>Your name</label>
           <input
             type="text"
             required
-className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-gray-400"            value={form.name}
+            placeholder="Jordan Lee"
+            className={inputClass}
+            value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Company / workspace name
-          </label>
+          <label className={labelClass}>Company / workspace name</label>
           <input
             type="text"
             required
-className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-gray-400"            value={form.workspaceName}
-            onChange={(e) =>
-              setForm({ ...form, workspaceName: e.target.value })
-            }
+            placeholder="Acme Inc."
+            className={inputClass}
+            value={form.workspaceName}
+            onChange={(e) => setForm({ ...form, workspaceName: e.target.value })}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
+          <label className={labelClass}>Email</label>
           <input
             type="email"
             required
-className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-gray-400"            value={form.email}
+            placeholder="you@company.com"
+            className={inputClass}
+            value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Password
-          </label>
+          <label className={labelClass}>Password</label>
           <input
             type="password"
             required
             minLength={8}
-className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-gray-400"            value={form.password}
+            placeholder="At least 8 characters"
+            className={inputClass}
+            value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
         </div>
@@ -123,11 +116,18 @@ className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-g
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 disabled:opacity-50"
+          className="mt-2 w-full rounded-lg bg-[#635BFF] py-2.5 text-[14.5px] font-medium text-white hover:bg-[#524AE0] disabled:opacity-50"
         >
-          {loading ? "Creating account..." : "Sign up"}
+          {loading ? "Creating workspace..." : "Create workspace"}
         </button>
+
+        <p className="pt-1 text-center text-[13.5px] text-[#697386]">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-[#635BFF] hover:text-[#524AE0]">
+            Log in
+          </Link>
+        </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }

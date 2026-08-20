@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
+  { href: "/", label: "Home", icon: "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10" },
   { href: "/dashboard", label: "Dashboard", icon: "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" },
   { href: "/feedback", label: "Feedback", icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" },
   { href: "/settings/members", label: "Members", icon: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" },
@@ -51,9 +52,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
             justifyContent: "space-between",
           }}
         >
-          <span style={{ fontWeight: 700, fontSize: 15, color: "var(--loop-text-primary)" }}>
+          <Link
+            href="/"
+            style={{ fontWeight: 700, fontSize: 15, color: "var(--loop-text-primary)", textDecoration: "none" }}
+          >
             LOOP
-          </span>
+          </Link>
           <button
             onClick={() => setMobileOpen((v) => !v)}
             style={{
@@ -85,7 +89,9 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
             overflowY: "auto",
           }}
         >
-          <div
+          <Link
+            href="/"
+            onClick={() => setMobileOpen(false)}
             style={{
               fontWeight: 700,
               fontSize: 16,
@@ -93,10 +99,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               padding: "0 10px",
               marginBottom: 20,
               marginTop: 4,
+              textDecoration: "none",
+              display: "block",
             }}
           >
             LOOP
-          </div>
+          </Link>
 
           <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {NAV_ITEMS.map((item) => {
@@ -143,7 +151,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               </span>
             </div>
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => signOut({ callbackUrl: "/" })}
               style={{
                 width: "100%",
                 textAlign: "left",

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
+import AuthShell, { inputClass, labelClass } from "../components/AuthShell";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,39 +34,36 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-8 rounded-lg shadow-md w-full max-w-md space-y-4"
-      >
-        <h1 className="text-2xl font-bold text-gray-900">Log in</h1>
-
+    <AuthShell
+      title="Welcome back"
+      subtitle="Log in to your company workspace to review feedback, themes, and reports."
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="bg-red-50 text-red-700 text-sm p-3 rounded">
+          <div className="rounded-lg border border-[#FECDCA] bg-[#FEF3F2] px-3 py-2.5 text-[13.5px] text-[#B42318]">
             {error}
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
+          <label className={labelClass}>Email</label>
           <input
             type="email"
             required
-className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-gray-400"            value={form.email}
+            placeholder="you@company.com"
+            className={inputClass}
+            value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Password
-          </label>
+          <label className={labelClass}>Password</label>
           <input
             type="password"
             required
-            className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-gray-400"
+            placeholder="Your password"
+            className={inputClass}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
@@ -74,18 +72,18 @@ className="mt-1 w-full border rounded px-3 py-2 text-gray-900 placeholder:text-g
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 disabled:opacity-50"
+          className="mt-2 w-full rounded-lg bg-[#635BFF] py-2.5 text-[14.5px] font-medium text-white hover:bg-[#524AE0] disabled:opacity-50"
         >
           {loading ? "Logging in..." : "Log in"}
         </button>
 
-        <p className="text-sm text-gray-500 text-center">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-black underline">
+        <p className="pt-1 text-center text-[13.5px] text-[#697386]">
+          Don&apos;t have a workspace yet?{" "}
+          <Link href="/signup" className="font-medium text-[#635BFF] hover:text-[#524AE0]">
             Sign up
           </Link>
         </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }
