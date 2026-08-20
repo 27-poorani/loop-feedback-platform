@@ -107,7 +107,7 @@ export default function MembersPage() {
   const [learnOpen, setLearnOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLTableCellElement>(null);
 
   const isAdmin = session?.user?.role === "ADMIN";
   const currentUserId = session?.user?.id;
